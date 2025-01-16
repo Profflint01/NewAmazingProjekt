@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy Bird Enhanced</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Press Start 2P', cursive;
+        }
+        #gameCanvas {
+            background-color: #70c5ce;
+        }
+        .arrow-btn {
+            width: 50px;
+            height: 50px;
+            background: yellow;
+            color: black;
+            font-size: 20px;
+            border-radius: 5px;
+            border: none;
+            text-align: center;
+            cursor: pointer;
+            line-height: 50px;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+    <div class="container mx-auto p-4">
+        <header class="flex justify-between items-center mb-4">
+            <h1 class="text-3xl">Flappy Bird Enhanced</h1>
+            <nav>
+                <ul class="flex space-x-4">
+                    <li><a href="#" class="hover:text-yellow-500" onclick="showSection('home')">Home</a></li>
+                    <li><a href="#" class="hover:text-yellow-500" onclick="showSection('leaderboard')">Leaderboard</a></li>
+                    <li><a href="#" class="hover:text-yellow-500" onclick="showSection('admin')">Admin</a></li>
+                    <li><a href="#" class="hover:text-yellow-500" onclick="showSection('console')">Console</a></li>
+                </ul>
+            </nav>
+        </header>
+
+        <main id="home" class="flex flex-col items-center">
+            <div id="announcementBox" class="bg-gray-800 p-4 mb-4 rounded w-full hidden">
+                <h2 class="text-xl">Announcements</h2>
+                <p id="announcementText">No announcements yet.</p>
+            </div>
+            <canvas id="gameCanvas" width="320" height="480" class="border-4 border-yellow-500"></canvas>
+            <button id="startButton" class="mt-4 px-4 py-2 bg-yellow-500 text-black rounded">Start Game</button>
+            <div class="mt-4 flex justify-between w-full">
+                <span>Coins: <span id="coinCount">0</span></span>
+                <span>Score: <span id="scoreCount">0</span></span>
+            </div>
+            <div class="mt-4 flex space-x-2">
+                <button class="arrow-btn" id="flapBtn">⤒</button>
+            </div>
+        </main>
+
+        <section id="leaderboard" class="mt-8 hidden">
+            <h2 class="text-2xl mb-4">Global Leaderboard</h2>
+            <table class="min-w-full bg-gray-800">
+                <thead>
+                    <tr>
+                        <th class="py-2 px-4 border-b border-gray-700">Rank</th>
+                        <th class="py-2 px-4 border-b border-gray-700">Player</th>
+                        <th class="py-2 px-4 border-b border-gray-700">Score</th>
+                        <th class="py-2 px-4 border-b border-gray-700">Coins</th>
+                    </tr>
+                </thead>
+                <tbody id="leaderboardTable"></tbody>
+            </table>
+        </section>
+
+        <section id="admin" class="mt-8 hidden">
+            <h2 class="text-2xl mb-4">Admin Panel</h2>
+            <input type="text" id="adminCommand" placeholder="Enter command" class="w-full p-2 bg-gray-800 border border-gray-700 rounded">
+            <button class="mt-2 px-4 py-2 bg-yellow-500 text-black rounded" onclick="processAdminCommand()">Send Command</button>
+        </section>
+
+        <section id="console" class="mt-8 hidden">
+            <h2 class="text-2xl mb-4">Console</h2>
+            <textarea id="consoleOutput" class="w-full h-32 bg-gray-800 text-white p-2" readonly></textarea>
+        </section>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game state
+        let bird = { x: 50, y: canvas.height / 2, width: 20, height: 20, velocity: 0, coins: 0, score: 0 };
+        let pipes = [];
+        let coins = [];
+        let gravity = 0.5;
+        let pipeSpeed = 2;
+        let pipeGap = 120;
+        let isGameRunning = false;
+        let leaderboard = [];
+        const consoleOutput = document.getElementById('consoleOutput');
+
+        function logToConsole(message) {
+            consoleOutput.value += `${message}\n`;
+        }
+
+        function showSection(section) {
+            document.querySelectorAll("main, section").forEach(el => el.classList.add("hidden"));
+            document.getElementById(section).classList.remove("hidden");
+        }
+
+        function updateLeaderboard(player, score, coins) {
+            leaderboard.push({ player, score, coins });
+            leaderboard.sort((a, b) => b.score - a.score);
+            const leaderboardTable = document.getElementById('leaderboardTable');
+            leaderboardTable.innerHTML = leaderboard
+                .map((entry, index) => `
+                    <tr>
+                        <td class="py-2 px-4 border-b border-gray-700">${index + 1}</td>
+                        <td class="py-2 px-4 border-b border-gray-700">${entry.player}</td>
+                        <td class="py-2 px-4 border-b border-gray-700">${entry.score}</td>
+                        <td class="py-2 px-4 border-b border-gray-700">${entry.coins}</td>
+                    </tr>
+                `)
+                .join('');
+        }
+
+        function processAdminCommand() {
+            const command = document.getElementById('adminCommand').value.trim();
+            logToConsole(`Admin issued: ${command}`);
+            if (command.startsWith("/announce")) {
+                const message = command.replace("/announce", "").trim();
+                document.getElementById('announcementText').textContent = message;
+                document.getElementById('announcementBox').classList.remove("hidden");
+                logToConsole(`Announcement made: "${message}"`);
+            } else if (command.startsWith("/addcoins")) {
+                const amount = parseInt(command.split(" ")[1]);
+                if (!isNaN(amount)) {
+                    bird.coins += amount;
+                    document.getElementById('coinCount').textContent = bird.coins;
+                    logToConsole(`Added ${amount} coins.`);
+                }
+            } else if (command.startsWith("/addscore")) {
+                const amount = parseInt(command.split(" ")[1]);
+                if (!isNaN(amount)) {
+                    bird.score += amount;
+                    document.getElementById('scoreCount').textContent = bird.score;
+                    logToConsole(`Added ${amount} score.`);
+                }
+            } else if (command.startsWith("/resetleaderboard")) {
+                leaderboard = [];
+                updateLeaderboard();
+                logToConsole("Leaderboard reset.");
+            } else if (command.startsWith("/endgame")) {
+                isGameRunning = false;
+                logToConsole("Game ended by admin.");
+            } else {
+                logToConsole("Unknown command.");
+            }
+        }
+
+        function startGame() {
+            isGameRunning = true;
+            bird.y = canvas.height / 2;
+            bird.velocity = 0;
+            bird.coins = 0;
+            bird.score = 0;
+            pipes = [];
+            coins = [];
+            spawnPipe();
+            spawnCoin();
+            logToConsole("Game started.");
+            gameLoop();
+        }
+
+        document.getElementById('startButton').addEventListener('click', startGame);
+
+        document.getElementById('flapBtn').addEventListener('click', () => {
+            if (isGameRunning) bird.velocity = -8;
+        });
+
+        function spawnPipe() {
+            const pipeHeight = Math.random() * (canvas.height - pipeGap - 40) + 20;
+            pipes.push({ x: canvas.width, topHeight: pipeHeight });
+        }
+
+        function spawnCoin() {
+            const coinY = Math.random() * (canvas.height - 30) + 10;
+            coins.push({ x: canvas.width, y: coinY, size: 10 });
+        }
+
+        function gameLoop() {
+            if (!isGameRunning) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            bird.velocity += gravity;
+            bird.y += bird.velocity;
+
+            if (bird.y + bird.height > canvas.height) {
+                isGameRunning = false;
+                updateLeaderboard("Player1", bird.score, bird.coins);
+                logToConsole(`Game Over. Score: ${bird.score}, Coins: ${bird.coins}`);
+                alert(`Game Over! Score: ${bird.score}, Coins: ${bird.coins}`);
+                return;
+            }
+
+            ctx.fillStyle = 'yellow';
+            ctx.fillRect(bird.x, bird.y, bird.width, bird.height);
+
+            // Handle pipes
+            pipes.forEach((pipe, index) => {
+                pipe.x -= pipeSpeed;
+
+                ctx.fillStyle = 'green';
+                ctx.fillRect(pipe.x, 0, 50, pipe.topHeight);
+                ctx.fillRect(pipe.x, pipe.topHeight + pipeGap, 50, canvas.height);
+
+                if (pipe.x + 50 < 0) pipes.splice(index, 1);
+
+                // Collision with pipes
+                if (
+                    bird.x < pipe.x + 50 &&
+                    bird.x + bird.width > pipe.x &&
+                    (bird.y < pipe.topHeight || bird.y + bird.height > pipe.topHeight + pipeGap)
+                ) {
+                    isGameRunning = false;
+                    updateLeaderboard("Player1", bird.score, bird.coins);
+                    logToConsole(`Game Over! Score: ${bird.score}`);
+                    alert(`Game Over! Score: ${bird.score}`);
+                }
+            });
+
+            // Handle coins
+            coins.forEach((coin, index) => {
+                coin.x -= pipeSpeed;
+                ctx.fillStyle = 'gold';
+                ctx.beginPath();
+                ctx.arc(coin.x, coin.y, coin.size, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (
+                    bird.x < coin.x + coin.size &&
+                    bird.x + bird.width > coin.x - coin.size &&
+                    bird.y < coin.y + coin.size &&
+                    bird.y + bird.height > coin.y - coin.size
+                ) {
+                    coins.splice(index, 1);
+                    bird.coins++;
+                    document.getElementById('coinCount').textContent = bird.coins;
+                }
+
+                if (coin.x + coin.size < 0) coins.splice(index, 1);
+            });
+
+            if (pipes.length === 0 || pipes[pipes.length - 1].x < canvas.width - 200) spawnPipe();
+            if (coins.length === 0 || coins[coins.length - 1].x < canvas.width - 150) spawnCoin();
+
+            bird.score++;
+            document.getElementById('scoreCount').textContent = bird.score;
+
+            requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>
